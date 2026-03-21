@@ -1,0 +1,6 @@
+{
+  "name": "Custom Calendar",
+  "content_type": "integration",
+  "domains": ["custom_calendar"],
+  "render_readme": true
+}

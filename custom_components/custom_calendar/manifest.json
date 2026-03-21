@@ -2,9 +2,9 @@
   "domain": "custom_calendar",
   "name": "Custom Calendar",
   "version": "1.3.0",
-  "documentation": "https://github.com/사용자이름/저장소이름",
+  "documentation": "https://github.com/murianwind/custom_calendar",
   "config_flow": true,
   "dependencies": ["calendar"],
-  "codeowners": ["@사용자이름"],
+  "codeowners": ["@murianwind"],
   "iot_class": "local_push"
 }

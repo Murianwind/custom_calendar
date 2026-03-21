@@ -77,13 +77,47 @@ class FilteredCalendar(CalendarEntity):
             "friendly_name": self._event.summary # 일정 제목을 friendly_name으로 설정
         }
 
+    async def async_get_events(self, hass, start_date, end_date):
+        """달력 대시보드 화면에서 일정을 렌더링할 때 호출됩니다."""
+        try:
+            response = await self.hass.services.async_call(
+                "calendar",
+                "get_events",
+                {
+                    "entity_id": self._parent_id,
+                    "start_date_time": start_date.isoformat(),
+                    "end_date_time": end_date.isoformat(),
+                },
+                blocking=True,
+                return_response=True,
+            )
+
+            raw_events = response.get(self._parent_id, {}).get("events", [])
+            matching_events = []
+            
+            for e in raw_events:
+                summary = e.get("summary", "")
+                if not self._search or self._search in summary.lower():
+                    e_start = dt_util.parse_datetime(e["start"]) or dt_util.parse_date(e["start"])
+                    e_end = dt_util.parse_datetime(e["end"]) or dt_util.parse_date(e["end"])
+                    matching_events.append(CalendarEvent(
+                        summary=summary,
+                        start=e_start,
+                        end=e_end,
+                        location=e.get("location"),
+                        description=e.get("description"),
+                    ))
+            return matching_events
+        except Exception as e:
+            _LOGGER.error("Error fetching events for UI '%s': %s", self._attr_name, e)
+            return []
+
     async def async_update(self):
         """서비스 호출을 통해 원본 달력의 데이터를 가져오고 갱신합니다."""
         start = dt_util.now()
         end = start + timedelta(days=self._days)
 
         try:
-            # 임포트 에러를 방지하기 위해 서비스 호출(get_events) 방식으로 변경
             response = await self.hass.services.async_call(
                 "calendar",
                 "get_events",
@@ -96,18 +130,14 @@ class FilteredCalendar(CalendarEntity):
                 return_response=True,
             )
 
-            # 응답 데이터에서 이벤트 목록 추출
             raw_events = response.get(self._parent_id, {}).get("events", [])
-            
-            # CalendarEvent 객체로 변환 및 필터링
             matching_events = []
+            
             for e in raw_events:
                 summary = e.get("summary", "")
                 if not self._search or self._search in summary.lower():
-                    # 시간 데이터 파싱
                     e_start = dt_util.parse_datetime(e["start"]) or dt_util.parse_date(e["start"])
                     e_end = dt_util.parse_datetime(e["end"]) or dt_util.parse_date(e["end"])
-                    
                     matching_events.append(CalendarEvent(
                         summary=summary,
                         start=e_start,

@@ -11,7 +11,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """설정 항목을 기반으로 엔티티를 추가합니다."""
-    # Data와 Options를 병합하여 최신 설정(새로 선택한 원본 달력 등)을 반영
+    # Data와 Options를 병합하여 최신 설정을 반영
     config = {**config_entry.data, **config_entry.options}
     async_add_entities([FilteredCalendar(hass, config, config_entry.entry_id)], True)
 
@@ -78,8 +78,11 @@ class FilteredCalendar(CalendarEntity):
 
     async def async_get_events(self, hass, start_date, end_date):
         """특정 기간 동안의 필터링된 이벤트를 가져옵니다 (대시보드 표출용)."""
+        # [방어 로직] 부팅 시 원본 달력이 아직 로드되지 않은 상태라면 빈 목록 반환 (경고 방지)
+        if self.hass.states.get(self._parent_id) is None:
+            return []
+
         try:
-            # target={"entity_id": ...} 오류 해결 부분
             response = await self.hass.services.async_call(
                 "calendar", "get_events",
                 {"start_date_time": start_date.isoformat(), "end_date_time": end_date.isoformat()},
@@ -104,10 +107,14 @@ class FilteredCalendar(CalendarEntity):
 
     async def async_update(self):
         """센서 상태를 주기적으로 업데이트합니다 (가장 가까운 일정 추적)."""
+        # [방어 로직] 부팅 시 원본 달력이 아직 로드되지 않은 상태라면 조용히 대기 (경고 방지)
+        if self.hass.states.get(self._parent_id) is None:
+            _LOGGER.debug("원본 달력(%s)이 아직 준비되지 않아 대기합니다.", self._parent_id)
+            return
+
         start = dt_util.now()
         end = start + timedelta(days=self._days)
         try:
-            # target={"entity_id": ...} 오류 해결 부분
             response = await self.hass.services.async_call(
                 "calendar", "get_events",
                 {"start_date_time": start.isoformat(), "end_date_time": end.isoformat()},

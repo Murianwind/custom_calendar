@@ -21,7 +21,6 @@ class FilteredCalendar(CalendarEntity):
     """원본 달력에서 이벤트를 필터링하여 보여주는 가상 달력 엔티티."""
 
     def __init__(self, hass, data, entry_id):
-        """초기화."""
         self.hass = hass
         self._parent_id = data[CONF_CAL_ID]
         self._attr_name = data["name"]
@@ -35,30 +34,26 @@ class FilteredCalendar(CalendarEntity):
 
     @property
     def name(self):
-        """엔티티의 이름을 반환합니다."""
         return self._attr_name
 
     @property
     def event(self) -> CalendarEvent | None:
-        """현재 진행 중이거나 가장 가까운 미래의 일정을 반환합니다."""
         return self._event
 
     @property
     def extra_state_attributes(self):
-        """사용자가 요청한 세부 속성을 반환합니다."""
         if not self._event:
             return {
                 "offset_reached": False,
                 "friendly_name": self._attr_name
             }
         
-        # 시작/종료 시간 문자열 가공 (YYYY-MM-DD HH:MM:SS)
         start = self._event.start
         end = self._event.end
         
         if isinstance(start, datetime):
             start_str = start.strftime("%Y-%m-%d %H:%M:%S")
-        else: # 종일 일정(date 객체) 처리
+        else:
             start_str = f"{start.isoformat()} 00:00:00"
 
         if isinstance(end, datetime):
@@ -74,20 +69,35 @@ class FilteredCalendar(CalendarEntity):
             "location": self._event.location or "",
             "description": self._event.description or "",
             "offset_reached": self._offset_reached,
-            "friendly_name": self._event.summary # 일정 제목을 friendly_name으로 설정
+            "friendly_name": self._event.summary
         }
 
+    def _parse_event_time(self, raw_time_str):
+        """문자열에서 시간대(Timezone)가 포함된 올바른 날짜 객체를 생성합니다."""
+        if not raw_time_str:
+            return None
+        # 길이가 10이면 날짜(종일 일정)
+        if len(raw_time_str) == 10:
+            return dt_util.parse_date(raw_time_str)
+        # 시간 정보가 포함된 경우
+        parsed_dt = dt_util.parse_datetime(raw_time_str)
+        # 시간대(timezone) 정보가 없다면 강제로 현재 시간대를 부여 (에러 방지 핵심)
+        if parsed_dt and parsed_dt.tzinfo is None:
+            parsed_dt = dt_util.as_local(parsed_dt)
+        return parsed_dt
+
     async def async_get_events(self, hass, start_date, end_date):
-        """달력 대시보드 화면에서 일정을 렌더링할 때 호출됩니다."""
+        """달력 대시보드 화면 렌더링용"""
         try:
+            # target을 명시적으로 분리하여 전달 (Entity Not Found 에러 해결)
             response = await self.hass.services.async_call(
                 "calendar",
                 "get_events",
                 {
-                    "entity_id": self._parent_id,
                     "start_date_time": start_date.isoformat(),
                     "end_date_time": end_date.isoformat(),
                 },
+                target={"entity_id": self._parent_id},
                 blocking=True,
                 return_response=True,
             )
@@ -98,22 +108,21 @@ class FilteredCalendar(CalendarEntity):
             for e in raw_events:
                 summary = e.get("summary", "")
                 if not self._search or self._search in summary.lower():
-                    e_start = dt_util.parse_datetime(e["start"]) or dt_util.parse_date(e["start"])
-                    e_end = dt_util.parse_datetime(e["end"]) or dt_util.parse_date(e["end"])
-                    matching_events.append(CalendarEvent(
-                        summary=summary,
-                        start=e_start,
-                        end=e_end,
-                        location=e.get("location"),
-                        description=e.get("description"),
-                    ))
+                    e_start = self._parse_event_time(e.get("start"))
+                    e_end = self._parse_event_time(e.get("end"))
+                    
+                    if e_start and e_end:
+                        matching_events.append(CalendarEvent(
+                            summary=summary, start=e_start, end=e_end,
+                            location=e.get("location"), description=e.get("description"),
+                        ))
             return matching_events
         except Exception as e:
-            _LOGGER.error("Error fetching events for UI '%s': %s", self._attr_name, e)
+            _LOGGER.error("Error fetching UI events: %s", e)
             return []
 
     async def async_update(self):
-        """서비스 호출을 통해 원본 달력의 데이터를 가져오고 갱신합니다."""
+        """센서 상태 주기적 업데이트"""
         start = dt_util.now()
         end = start + timedelta(days=self._days)
 
@@ -122,10 +131,10 @@ class FilteredCalendar(CalendarEntity):
                 "calendar",
                 "get_events",
                 {
-                    "entity_id": self._parent_id,
                     "start_date_time": start.isoformat(),
                     "end_date_time": end.isoformat(),
                 },
+                target={"entity_id": self._parent_id},
                 blocking=True,
                 return_response=True,
             )
@@ -136,31 +145,36 @@ class FilteredCalendar(CalendarEntity):
             for e in raw_events:
                 summary = e.get("summary", "")
                 if not self._search or self._search in summary.lower():
-                    e_start = dt_util.parse_datetime(e["start"]) or dt_util.parse_date(e["start"])
-                    e_end = dt_util.parse_datetime(e["end"]) or dt_util.parse_date(e["end"])
-                    matching_events.append(CalendarEvent(
-                        summary=summary,
-                        start=e_start,
-                        end=e_end,
-                        location=e.get("location"),
-                        description=e.get("description"),
-                    ))
+                    e_start = self._parse_event_time(e.get("start"))
+                    e_end = self._parse_event_time(e.get("end"))
+                    
+                    if e_start and e_end:
+                        matching_events.append(CalendarEvent(
+                            summary=summary, start=e_start, end=e_end,
+                            location=e.get("location"), description=e.get("description"),
+                        ))
 
             if not matching_events:
                 self._event = None
                 self._offset_reached = False
             else:
-                # 시간순 정렬 후 가장 가까운 일정 선택
-                matching_events.sort(key=lambda x: x.start if isinstance(x.start, datetime) 
-                                     else datetime.combine(x.start, datetime.min.time()))
+                # 시간순 정렬 (종일 일정과 일반 일정 비교 시 타입 에러 방지)
+                def get_sort_key(event_obj):
+                    if isinstance(event_obj.start, datetime):
+                        return event_obj.start
+                    return dt_util.as_local(datetime.combine(event_obj.start, datetime.min.time()))
+
+                matching_events.sort(key=get_sort_key)
+                
+                # 가장 가까운 미래 일정 선택
                 self._event = matching_events[0]
                 self._offset_reached = self._check_offset(self._event.summary, self._event.start)
 
         except Exception as e:
-            _LOGGER.error("Update failed for Custom Calendar '%s': %s", self._attr_name, e)
+            _LOGGER.error("Update failed: %s", e)
 
     def _check_offset(self, summary, start_time):
-        """일정 제목의 !! 뒤 숫자를 파싱하여 오프셋 도달 여부를 계산합니다."""
+        """오프셋 도달 여부 계산"""
         if self._offset_char not in summary:
             return False
         try:
@@ -173,7 +187,7 @@ class FilteredCalendar(CalendarEntity):
             if isinstance(start_time, datetime):
                 start_dt = start_time
             else:
-                start_dt = dt_util.start_of_local_day(datetime.combine(start_time, datetime.min.time()))
+                start_dt = dt_util.as_local(datetime.combine(start_time, datetime.min.time()))
 
             return dt_util.now() >= (start_dt - timedelta(minutes=offset_val))
         except Exception:

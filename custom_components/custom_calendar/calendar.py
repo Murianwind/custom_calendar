@@ -8,6 +8,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """설정 항목을 기반으로 엔티티를 추가합니다."""
+    # 엔티티 추가 후 즉시 update를 실행하도록 두 번째 인자를 True로 설정합니다.
     async_add_entities([FilteredCalendar(hass, config_entry.data, config_entry.entry_id)], True)
 
 class FilteredCalendar(CalendarEntity):
@@ -22,13 +23,17 @@ class FilteredCalendar(CalendarEntity):
         self._days = min(data.get(CONF_DAYS, 30), MAX_DAYS)
         self._attr_unique_id = entry_id
         
-        # 내부 상태 저장용 변수
-        self._event = None
+        self._event: CalendarEvent | None = None
         self._offset_reached = False
 
     @property
+    def name(self):
+        """엔티티 이름을 반환합니다."""
+        return self._attr_name
+
+    @property
     def event(self) -> CalendarEvent | None:
-        """HA 코어가 현재/다음 일정을 확인하기 위해 호출하는 필수 프로퍼티입니다."""
+        """이 부분이 핵심입니다. HA 코어가 상태를 계산하기 위해 호출합니다."""
         return self._event
 
     @property
@@ -54,7 +59,6 @@ class FilteredCalendar(CalendarEntity):
             events = await self.hass.components.calendar.async_get_events(
                 self._parent_id, start_date, end_date
             )
-            # 검색어 필터링
             return [e for e in events if not self._search or self._search in e.summary.lower()]
         except Exception as e:
             _LOGGER.error("Error getting events from %s: %s", self._parent_id, e)
@@ -69,33 +73,27 @@ class FilteredCalendar(CalendarEntity):
             events = await self.hass.components.calendar.async_get_events(
                 self._parent_id, start, end
             )
-            
-            # 검색어 필터링 로직
             matching = [e for e in events if not self._search or self._search in e.summary.lower()]
 
             if not matching:
                 self._event = None
                 self._offset_reached = False
             else:
-                # 가장 빠른 일정을 현재 이벤트로 설정
                 self._event = matching[0]
                 self._offset_reached = self._check_offset(self._event.summary, self._event.start)
-                
         except Exception as e:
             _LOGGER.error("Custom Calendar update failed for %s: %s", self._attr_name, e)
 
     def _check_offset(self, summary, start_time):
-        """오프셋(!!) 도달 여부를 계산합니다."""
+        """오프셋 도달 여부를 계산합니다."""
         if self._offset_char not in summary:
             return False
         try:
             parts = summary.split(self._offset_char)
-            # 숫자가 아닌 문자 제거 후 정수 변환 (예: '!!30분' -> 30)
             digits = "".join(filter(str.isdigit, parts[1]))
             if not digits:
                 return False
             offset_val = int(digits)
             return dt_util.now() >= (start_time - timedelta(minutes=offset_val))
-        except Exception as e:
-            _LOGGER.debug("Offset calculation error: %s", e)
+        except Exception:
             return False

@@ -1,10 +1,21 @@
 import voluptuous as vol
 from homeassistant import config_entries
-from .const import DOMAIN, CONF_CAL_ID, CONF_SEARCH, CONF_OFFSET, CONF_DAYS, MAX_DAYS, DEFAULT_DAYS
+from .const import (
+    DOMAIN,
+    CONF_CAL_ID,
+    CONF_SEARCH,
+    CONF_OFFSET,
+    CONF_DAYS,
+    MAX_DAYS,
+    DEFAULT_DAYS,
+)
 
 class CustomCalendarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """설정 흐름을 관리합니다."""
+
     async def async_step_user(self, user_input=None):
         errors = {}
+        # 시스템에 등록된 달력 엔티티 목록 가져오기
         calendar_entities = self.hass.states.async_entity_ids("calendar")
         
         if not calendar_entities:
@@ -16,13 +27,17 @@ class CustomCalendarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 return self.async_create_entry(title=user_input["name"], data=user_input)
 
-        entity_list = {eid: f"{self.hass.states.get(eid).attributes.get('friendly_name', eid)} ({eid})" 
-                       for eid in calendar_entities}
+        # 드롭다운 표시용 목록 생성
+        entity_list = {}
+        for eid in calendar_entities:
+            state = self.hass.states.get(eid)
+            name = state.attributes.get('friendly_name', eid) if state else eid
+            entity_list[eid] = f"{name} ({eid})"
 
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required(CONF_CAL_ID): vol.In(entity_list),
+                vol.Required(CONF_CAL_ID): vol.In(entity_list), # 드롭다운 선택
                 vol.Required("name"): str,
                 vol.Optional(CONF_SEARCH, default=""): str,
                 vol.Optional(CONF_OFFSET, default="!!"): str,

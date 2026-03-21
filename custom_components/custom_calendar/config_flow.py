@@ -14,7 +14,7 @@ class CustomCalendarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(title=user_input["name"], data=user_input)
 
         # UI 스키마 정의
-        return self.show_form(
+        return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
                 vol.Required(CONF_CAL_ID): str,

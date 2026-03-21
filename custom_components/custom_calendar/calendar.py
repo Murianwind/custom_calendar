@@ -9,7 +9,7 @@ from .const import (
     CONF_SEARCH, 
     CONF_OFFSET, 
     CONF_DAYS, 
-    CONF_UNIQUE_ID, 
+    CONF_UNIQUE_ID,
     MAX_DAYS
 )
 
@@ -31,7 +31,6 @@ class FilteredCalendar(CalendarEntity):
         self._search = data.get(CONF_SEARCH, "").lower()
         self._offset_char = data.get(CONF_OFFSET, "!!")
         self._days = min(data.get(CONF_DAYS, 30), MAX_DAYS)
-        # 사용자가 설정한 고유 ID 사용
         self._attr_unique_id = data.get(CONF_UNIQUE_ID, entry_id)
         
         self._event: CalendarEvent | None = None
@@ -60,7 +59,10 @@ class FilteredCalendar(CalendarEntity):
     @property
     def extra_state_attributes(self):
         if not self._event:
-            return {"offset_reached": False, "friendly_name": self._attr_name}
+            return {
+                "offset_reached": False, 
+                "friendly_name": self._attr_name
+            }
         
         start = self._event.start
         end = self._event.end

@@ -1,32 +1,42 @@
-from datetime import timedelta
 import logging
-from homeassistant.components.calendar import CalendarEntity
+from datetime import timedelta
+from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.util import dt as dt_util
 from .const import CONF_CAL_ID, CONF_SEARCH, CONF_OFFSET, CONF_DAYS, MAX_DAYS
 
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    async_add_entities([FilteredCalendar(hass, config_entry.data, config_entry.entry_id)])
+    """설정 항목을 기반으로 엔티티를 추가합니다."""
+    async_add_entities([FilteredCalendar(hass, config_entry.data, config_entry.entry_id)], True)
 
 class FilteredCalendar(CalendarEntity):
+    """필터링된 기능을 가진 달력 엔티티입니다."""
+
     def __init__(self, hass, data, entry_id):
         self.hass = hass
         self._parent_id = data[CONF_CAL_ID]
         self._attr_name = data["name"]
         self._search = data.get(CONF_SEARCH, "").lower()
         self._offset_char = data.get(CONF_OFFSET, "!!")
-        # 설정값이 최대치를 넘지 않도록 강제 제한
         self._days = min(data.get(CONF_DAYS, 30), MAX_DAYS)
         self._attr_unique_id = entry_id
         
+        # 내부 상태 저장용 변수
         self._event = None
         self._offset_reached = False
 
     @property
+    def event(self) -> CalendarEvent | None:
+        """HA 코어가 현재/다음 일정을 확인하기 위해 호출하는 필수 프로퍼티입니다."""
+        return self._event
+
+    @property
     def extra_state_attributes(self):
+        """엔티티의 추가 속성을 정의합니다."""
         if not self._event:
             return {"offset_reached": False}
+        
         return {
             "message": self._event.summary,
             "all_day": self._event.all_day,
@@ -39,14 +49,19 @@ class FilteredCalendar(CalendarEntity):
         }
 
     async def async_get_events(self, hass, start_date, end_date):
-        """달력 카드 등에 일정을 뿌려줄 때 호출됨"""
-        events = await self.hass.components.calendar.async_get_events(
-            self._parent_id, start_date, end_date
-        )
-        return [e for e in events if not self._search or self._search in e.summary.lower()]
+        """달력 대시보드 화면에 일정을 뿌려줄 때 호출됩니다."""
+        try:
+            events = await self.hass.components.calendar.async_get_events(
+                self._parent_id, start_date, end_date
+            )
+            # 검색어 필터링
+            return [e for e in events if not self._search or self._search in e.summary.lower()]
+        except Exception as e:
+            _LOGGER.error("Error getting events from %s: %s", self._parent_id, e)
+            return []
 
     async def async_update(self):
-        """센서 상태를 주기적으로 업데이트"""
+        """주기적으로 부모 달력에서 데이터를 가져와 가공합니다."""
         start = dt_util.now()
         end = start + timedelta(days=self._days)
 
@@ -54,23 +69,33 @@ class FilteredCalendar(CalendarEntity):
             events = await self.hass.components.calendar.async_get_events(
                 self._parent_id, start, end
             )
+            
+            # 검색어 필터링 로직
             matching = [e for e in events if not self._search or self._search in e.summary.lower()]
 
             if not matching:
                 self._event = None
                 self._offset_reached = False
             else:
+                # 가장 빠른 일정을 현재 이벤트로 설정
                 self._event = matching[0]
                 self._offset_reached = self._check_offset(self._event.summary, self._event.start)
+                
         except Exception as e:
-            _LOGGER.error("Custom Calendar update failed: %s", e)
+            _LOGGER.error("Custom Calendar update failed for %s: %s", self._attr_name, e)
 
     def _check_offset(self, summary, start_time):
+        """오프셋(!!) 도달 여부를 계산합니다."""
         if self._offset_char not in summary:
             return False
         try:
             parts = summary.split(self._offset_char)
-            offset_val = int("".join(filter(str.isdigit, parts[1])))
+            # 숫자가 아닌 문자 제거 후 정수 변환 (예: '!!30분' -> 30)
+            digits = "".join(filter(str.isdigit, parts[1]))
+            if not digits:
+                return False
+            offset_val = int(digits)
             return dt_util.now() >= (start_time - timedelta(minutes=offset_val))
-        except:
+        except Exception as e:
+            _LOGGER.debug("Offset calculation error: %s", e)
             return False

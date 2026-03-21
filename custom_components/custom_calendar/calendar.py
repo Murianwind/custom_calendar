@@ -32,14 +32,11 @@ class FilteredCalendar(CalendarEntity):
         self._days = min(data.get(CONF_DAYS, 30), MAX_DAYS)
         self._attr_unique_id = data.get(CONF_UNIQUE_ID, entry_id)
 
-        # 사용자 요청 1: 엔티티 ID를 사용자가 입력한 unique_id 기반으로 강제 지정
-        # (slugify는 대문자나 띄어쓰기를 HA 엔티티 규칙에 맞게 소문자와 언더바로 자동 변환해줍니다)
+        # 사용자가 입력한 고유 ID를 엔티티 ID로 강제 지정 (slugify 적용)
         self.entity_id = f"calendar.{slugify(self._attr_unique_id)}"
         
         self._event: CalendarEvent | None = None
         self._offset_reached = False
-
-        # 사용자 요청 3: 복잡했던 DeviceInfo(기기 묶음) 로직 완전히 제거됨
 
     @property
     def name(self):
@@ -81,16 +78,22 @@ class FilteredCalendar(CalendarEntity):
     def _parse_event_time(self, raw_time_str):
         if not raw_time_str: return None
         if len(raw_time_str) == 10: return dt_util.parse_date(raw_time_str)
+        
         parsed_dt = dt_util.parse_datetime(raw_time_str)
         if parsed_dt and parsed_dt.tzinfo is None:
             parsed_dt = dt_util.as_local(parsed_dt)
         return parsed_dt
 
     async def async_get_events(self, hass, start_date, end_date):
+        """특정 기간 동안의 필터링된 이벤트를 가져옵니다 (대시보드 표출용)."""
         try:
+            # [디버깅 완료] target={"entity_id": ...}를 정확히 지정하여 서비스 호출
             response = await self.hass.services.async_call(
                 "calendar", "get_events",
-                {"start_date_time": start_date.isoformat(), "end_date_time": end_date.isoformat()},
+                {
+                    "start_date_time": start_date.isoformat(), 
+                    "end_date_time": end_date.isoformat()
+                },
                 target={"entity_id": self._parent_id},
                 blocking=True, return_response=True,
             )
@@ -111,15 +114,21 @@ class FilteredCalendar(CalendarEntity):
             return []
 
     async def async_update(self):
+        """센서 상태를 주기적으로 업데이트합니다 (가장 가까운 일정 추적)."""
         start = dt_util.now()
         end = start + timedelta(days=self._days)
         try:
+            # [오류 해결 핵심] target={"entity_id": ...}를 정확히 지정하여 서비스 호출
             response = await self.hass.services.async_call(
                 "calendar", "get_events",
-                {"start_date_time": start.isoformat(), "end_date_time": end.isoformat()},
+                {
+                    "start_date_time": start.isoformat(), 
+                    "end_date_time": end.isoformat()
+                },
                 target={"entity_id": self._parent_id},
                 blocking=True, return_response=True,
             )
+            
             raw_events = response.get(self._parent_id, {}).get("events", [])
             matching_events = []
             for e in raw_events:
@@ -143,6 +152,7 @@ class FilteredCalendar(CalendarEntity):
                 self._event = matching_events[0]
                 self._offset_reached = self._check_offset(self._event.summary, self._event.start)
         except Exception as e:
+            # 업데이트 실패 시 로깅만 하고 기존 상태 유지
             _LOGGER.error("Update failed: %s", e)
 
     def _check_offset(self, summary, start_time):
@@ -150,6 +160,7 @@ class FilteredCalendar(CalendarEntity):
         try:
             digits = "".join(filter(str.isdigit, summary.split(self._offset_char)[-1]))
             if not digits: return False
+            
             start_dt = start_time if isinstance(start_time, datetime) else dt_util.as_local(datetime.combine(start_time, datetime.min.time()))
             return dt_util.now() >= (start_dt - timedelta(minutes=int(digits)))
         except Exception: return False

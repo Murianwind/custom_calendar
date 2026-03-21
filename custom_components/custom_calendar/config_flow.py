@@ -29,7 +29,13 @@ class CustomCalendarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
         })
 
-        return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
+        # [수정 1] 번역 파일의 {max_days} 변수를 위해 description_placeholders 추가
+        return self.async_show_form(
+            step_id="user", 
+            data_schema=data_schema, 
+            errors=errors,
+            description_placeholders={"max_days": MAX_DAYS}
+        )
 
     @staticmethod
     @callback
@@ -42,18 +48,18 @@ class CustomCalendarOptionsFlowHandler(config_entries.OptionsFlow):
     """설치 후 '구성(Configure)' 버튼을 눌렀을 때의 흐름."""
 
     def __init__(self, config_entry):
-        self.config_entry = config_entry
+        # [수정 2] HA 최신 버전 충돌 방지: self.config_entry 대신 self._entry 사용
+        self._entry = config_entry
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
-            # 수정된 내용을 저장 (이 순간 __init__.py의 update_listener가 작동함)
+            # 수정된 내용을 저장
             return self.async_create_entry(title="", data=user_input)
 
-        # 기존 설정값(data)과 수정값(options) 병합
-        options = {**self.config_entry.data, **self.config_entry.options}
+        # 기존 설정값(data)과 수정값(options) 병합 (self._entry 사용)
+        options = {**self._entry.data, **self._entry.options}
 
         data_schema = vol.Schema({
-            # 원본 달력을 다시 선택할 수 있도록 추가됨
             vol.Required(CONF_CAL_ID, default=options.get(CONF_CAL_ID)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="calendar")
             ),
@@ -64,4 +70,9 @@ class CustomCalendarOptionsFlowHandler(config_entries.OptionsFlow):
             ),
         })
 
-        return self.async_show_form(step_id="init", data_schema=data_schema)
+        # [수정 1] 구성 화면에서도 {max_days} 변수 전달
+        return self.async_show_form(
+            step_id="init", 
+            data_schema=data_schema,
+            description_placeholders={"max_days": MAX_DAYS}
+        )

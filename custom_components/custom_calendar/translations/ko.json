@@ -3,18 +3,19 @@
     "step": {
       "user": {
         "title": "Custom Calendar 설정",
-        "description": "필터링할 캘린더 정보와 검색어를 입력하세요. 미래 보기 범위는 최대 {max_days}일까지 가능합니다.",
+        "description": "필터링할 원본 달력을 선택하세요. (최대 {max_days}일 범위)",
         "data": {
-          "cal_id": "원본 캘린더 엔티티 ID (예: calendar.google)",
-          "name": "새로 만들 달력 이름",
-          "search": "검색 키워드 (필수 아님)",
+          "cal_id": "원본 달력 선택",
+          "name": "새 달력 이름",
+          "search": "검색어 (포함된 일정만 표시)",
           "offset": "오프셋 구분자 (기본: !! )",
-          "days": "미래 보기 범위 (1 ~ 365일)"
+          "days": "미래 보기 범위 (일)"
         }
       }
     },
     "error": {
-      "range_exceeded": "범위는 1일에서 365일 사이여야 합니다."
+      "range_exceeded": "범위는 1~{max_days}일 사이여야 합니다.",
+      "no_calendars_found": "시스템에 등록된 달력 엔티티를 찾을 수 없습니다."
     }
   }
 }

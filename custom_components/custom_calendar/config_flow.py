@@ -24,7 +24,7 @@ class CustomCalendarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors["base"] = "no_calendars_found"
 
         if user_input is not None:
-            # 수동으로 입력한 값을 엔티티의 Unique ID로 지정
+            # 수동으로 입력한 값을 고유 ID로 지정 (중복 방지)
             await self.async_set_unique_id(user_input[CONF_UNIQUE_ID])
             self._abort_if_unique_id_configured()
             
@@ -35,12 +35,13 @@ class CustomCalendarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             for eid in calendar_entities
         }
 
+        # 사용자 요청 2: 필드 순서 조정 (원본 달력 -> 이름 -> 고유 ID(엔티티ID) -> 검색어 -> ...)
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required(CONF_UNIQUE_ID): str,
                 vol.Required(CONF_CAL_ID): vol.In(entity_list),
                 vol.Required("name"): str,
+                vol.Required(CONF_UNIQUE_ID): str,
                 vol.Optional(CONF_SEARCH, default=""): str,
                 vol.Optional(CONF_OFFSET, default="!!"): str,
                 vol.Optional(CONF_DAYS, default=DEFAULT_DAYS): vol.All(
@@ -58,17 +59,13 @@ class CustomCalendarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class CustomCalendarOptionsFlowHandler(config_entries.OptionsFlow):
     """이미 생성된 엔티티의 설정을 수정합니다."""
-    
     def __init__(self, config_entry):
-        # [수정 핵심] HA 최신 버전의 읽기 전용 속성(config_entry)과의 이름 충돌을 피하기 위해 
-        # 내부 전용 변수(_config_entry)에 값을 저장합니다.
         self._config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # 충돌 없이 안전하게 기존 값(options 우선, 없으면 data)을 로드
         options = self._config_entry.options
         data = self._config_entry.data
 

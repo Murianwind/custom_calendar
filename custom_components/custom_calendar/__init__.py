@@ -1,28 +1,19 @@
-"""The Custom Calendar integration."""
-import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-
 from .const import DOMAIN
 
-_LOGGER = logging.getLogger(__name__)
-
-# 지원하는 플랫폼 리스트 (본 컴포넌트는 calendar 플랫폼을 사용함)
 PLATFORMS = ["calendar"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """UI(Config Entry)를 통해 통합 구성요소가 설정될 때 호출됩니다."""
-    hass.data.setdefault(DOMAIN, {})
+    # 옵션 업데이트 감시 리스너 등록
+    entry.async_on_unload(entry.add_update_listener(update_listener))
     
-    # 설정된 플랫폼(calendar.py)을 로드합니다.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    
     return True
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """통합 구성요소가 제거될 때 호출됩니다."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
+async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
+    """옵션이 수정되면 플랫폼을 다시 로드합니다."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
-    return unload_ok
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

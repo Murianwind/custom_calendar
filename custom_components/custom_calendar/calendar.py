@@ -1,8 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
-from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.util import dt as dt_util
+from homeassistant.util import dt as dt_util, slugify
 from .const import (
     DOMAIN, 
     CONF_CAL_ID, 
@@ -22,7 +21,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     async_add_entities([FilteredCalendar(hass, config, config_entry.entry_id)], True)
 
 class FilteredCalendar(CalendarEntity):
-    """필터링 기능을 가진 가상 달력 엔티티."""
+    """필터링 기능을 가진 개별 달력 엔티티."""
 
     def __init__(self, hass, data, entry_id):
         self.hass = hass
@@ -32,17 +31,15 @@ class FilteredCalendar(CalendarEntity):
         self._offset_char = data.get(CONF_OFFSET, "!!")
         self._days = min(data.get(CONF_DAYS, 30), MAX_DAYS)
         self._attr_unique_id = data.get(CONF_UNIQUE_ID, entry_id)
+
+        # 사용자 요청 1: 엔티티 ID를 사용자가 입력한 unique_id 기반으로 강제 지정
+        # (slugify는 대문자나 띄어쓰기를 HA 엔티티 규칙에 맞게 소문자와 언더바로 자동 변환해줍니다)
+        self.entity_id = f"calendar.{slugify(self._attr_unique_id)}"
         
         self._event: CalendarEvent | None = None
         self._offset_reached = False
 
-        # 하나의 'Custom Calendar' 기기로 모든 엔티티를 그룹화
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "custom_calendar_master_device")},
-            name="Custom Calendar",
-            manufacturer="My Home Assistant",
-            model="Multi-Filter Calendar Service",
-        )
+        # 사용자 요청 3: 복잡했던 DeviceInfo(기기 묶음) 로직 완전히 제거됨
 
     @property
     def name(self):

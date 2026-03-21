@@ -7,7 +7,7 @@ from .const import (
     CONF_SEARCH, 
     CONF_OFFSET, 
     CONF_DAYS, 
-    CONF_UNIQUE_ID, 
+    CONF_UNIQUE_ID,
     MAX_DAYS, 
     DEFAULT_DAYS
 )
@@ -24,7 +24,7 @@ class CustomCalendarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors["base"] = "no_calendars_found"
 
         if user_input is not None:
-            # 사용자가 입력한 고유 ID를 엔티티의 유니크 ID로 설정
+            # 수동으로 입력한 값을 엔티티의 Unique ID로 지정
             await self.async_set_unique_id(user_input[CONF_UNIQUE_ID])
             self._abort_if_unique_id_configured()
             
@@ -65,7 +65,6 @@ class CustomCalendarOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # 기존 값(options 우선, 없으면 data)을 기본값으로 로드
         options = self.config_entry.options
         data = self.config_entry.data
 

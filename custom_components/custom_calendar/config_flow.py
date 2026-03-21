@@ -58,15 +58,19 @@ class CustomCalendarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class CustomCalendarOptionsFlowHandler(config_entries.OptionsFlow):
     """이미 생성된 엔티티의 설정을 수정합니다."""
+    
     def __init__(self, config_entry):
-        self.config_entry = config_entry
+        # [수정 핵심] HA 최신 버전의 읽기 전용 속성(config_entry)과의 이름 충돌을 피하기 위해 
+        # 내부 전용 변수(_config_entry)에 값을 저장합니다.
+        self._config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        options = self.config_entry.options
-        data = self.config_entry.data
+        # 충돌 없이 안전하게 기존 값(options 우선, 없으면 data)을 로드
+        options = self._config_entry.options
+        data = self._config_entry.data
 
         return self.async_show_form(
             step_id="init",

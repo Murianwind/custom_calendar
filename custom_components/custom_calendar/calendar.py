@@ -149,7 +149,14 @@ class FilteredCalendar(CalendarEntity):
                 self._event = matching_events[0]
                 self._offset_reached = self._check_offset(self._event.summary, self._event.start)
         except Exception as e:
-            _LOGGER.error("Update failed: %s", e)
+            # 에러 메시지에 "Sync from server has not completed"가 포함되어 있으면 조용히 대기 (Debug 처리)
+            if "Sync from server has not completed" in str(e):
+                _LOGGER.debug(
+                    "원본 달력(%s)이 아직 서버와 동기화 중입니다. 다음 주기에 다시 시도합니다.", 
+                    self._parent_id
+                )
+            else:
+                _LOGGER.error("Update failed: %s", e)
 
     def _check_offset(self, summary, start_time):
         if self._offset_char not in summary: return False

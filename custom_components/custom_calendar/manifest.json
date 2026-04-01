@@ -5,7 +5,7 @@
   "config_flow": true,
   "dependencies": ["calendar"],
   "documentation": "https://github.com/murianwind/custom_calendar",
-  "issue_tracker": "https://github.com/murianwind/custom_calendar/issues",
   "iot_class": "local_push",
+  "issue_tracker": "https://github.com/murianwind/custom_calendar/issues",
   "version": "1.0.3"
 }
